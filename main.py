@@ -1,11 +1,13 @@
 import tkinter as tk
 import time
-from recipes import recipes  # Assure-toi que ton fichier recipes.py existe
+import random
+import threading
+from recipes import recipes  # fichier recipes.py
 
 available_ingredients = [
     "salad", "tomato", "onion", "carrot", "pepper",
     "chicken", "beef", "fish", "egg",
-    "cheese", "bread", "cucumber"
+    "cheese", "bread", "cucumber", "lemon", "lettuce"
 ]
 
 # ------------------ Fenêtre pour indiquer que la commande est servie ------------------
@@ -16,14 +18,21 @@ def show_order_served():
     label = tk.Label(served_window, text="Commande servie !", font=("Arial", 24), fg="black")
     label.pack(expand=True)
 
+# ------------------ Réinitialiser les ingrédients ------------------
+def reset_ingredients_colors():
+    """Remet tous les ingrédients en blanc avant une nouvelle commande"""
+    for ing_shape in ingredients_shapes.values():
+        canvas.itemconfig(ing_shape, fill="white")
+    canvas.update()
+
 # ------------------ Agent Chef ------------------
 class ChefAgent:
     def __init__(self, canvas, chef_shape, output_widget, name="Chef"):
         self.canvas = canvas
         self.chef = chef_shape
         self.output = output_widget
-        self.x, self.y = self.canvas.coords(self.chef)[:2]
         self.name = name
+        self.x, self.y = self.canvas.coords(self.chef)[:2]
 
     def move_to(self, target_x, target_y, speed=5):
         while True:
@@ -49,47 +58,67 @@ class ChefAgent:
         self.output.yview_moveto(1)
         self.canvas.itemconfig(ingredient_shape, fill="green")
         self.canvas.update()
-        time.sleep(0.5)
+        time.sleep(0.4)
 
     def perform_method(self, ing_name, method):
         self.output.insert(tk.END, f"{self.name} {method} {ing_name}...\n")
         self.output.yview_moveto(1)
         self.canvas.update()
-        time.sleep(0.5)
+        time.sleep(0.4)
 
     def serve(self, counter_shape):
+        global start_time, score, timer_running
+
+        # ✅ Stop le minuteur dès que le plat est servi
+        end_time = time.time()
+        elapsed = int(end_time - start_time)
+        timer_running = False
+        timer_label.config(text=f"✅ Commande servie en {elapsed}s")
+
+        # Calcul du score
+        bonus = max(0, (60 - elapsed) // 5)  # Bonus si rapide
+        points = 20 + bonus if elapsed < 60 else 10  # Moins de points si lent
+        score += points
+        score_label.config(text=f"Score : {score}")
+
+        # Visuel + message
         self.canvas.itemconfig(counter_shape, fill="red")
-        self.output.insert(tk.END, f"\n{self.name} a servi le plat au comptoir !\n")
+        self.output.insert(
+            tk.END,
+            f"\n{self.name} a servi le plat au comptoir ! "
+            f"Temps : {elapsed}s → +{points} points\n"
+        )
         self.output.yview_moveto(1)
         self.canvas.update()
         show_order_served()
 
     def cooperate(self, other_agent, dish_order, ingredients_shapes, prep_pos, counter_pos, counter_shape):
         """Ce chef coopère avec un autre agent pour préparer une recette"""
+        global start_time, timer_running
         self.output.delete("1.0", tk.END)
-
         if dish_order not in recipes:
             self.output.insert(tk.END, "Recette inconnue...\n")
             return
+
+        reset_ingredients_colors()  # 🟢 Réinitialiser les ingrédients avant une commande
+        start_timer()  # Lancer le chrono
 
         recipe = recipes[dish_order]
         required_ingredients = recipe["ingredients"]
         methods = recipe["methods"]
 
-        # Répartition des ingrédients
         for i, ing in enumerate(required_ingredients):
             if ing in available_ingredients:
                 x1, y1, x2, y2 = self.canvas.coords(ingredients_shapes[ing])
-                if i % 2 == 0:  # pair → ce chef
+                if i % 2 == 0:
                     self.move_to(x1, y1)
                     self.pick_ingredient(ingredients_shapes[ing], ing)
-                else:  # impair → autre agent
+                else:
                     other_agent.move_to(x1, y1)
                     other_agent.pick_ingredient(ingredients_shapes[ing], ing)
 
-        # Les deux vont au plan de travail
         self.move_to(prep_pos[0], prep_pos[1])
-        other_agent.move_to(prep_pos[0] + 50, prep_pos[1])  # petit décalage
+        other_agent.move_to(prep_pos[0] + 50, prep_pos[1])
 
         cours_text = self.canvas.create_text(
             (prep_pos[0] + prep_pos[0] + 150) // 2,
@@ -100,7 +129,6 @@ class ChefAgent:
         )
         self.canvas.update()
 
-        # Préparation par ce chef
         for ing in required_ingredients:
             if ing in methods:
                 for action in methods[ing]:
@@ -108,19 +136,56 @@ class ChefAgent:
 
         self.canvas.delete(cours_text)
         self.canvas.update()
-
-        # Service par l'autre chef
         other_agent.move_to(counter_pos[0], counter_pos[1])
         other_agent.serve(counter_shape)
 
+# ------------------ Timer ------------------
+def start_timer():
+    global timer_running, start_time
+    if timer_running:
+        return
+    timer_running = True
+    start_time = time.time()
+    update_timer()
+
+def update_timer():
+    global timer_running, start_time
+    if not timer_running:
+        return
+    elapsed = int(time.time() - start_time)
+    remaining = max(0, 60 - elapsed)
+    timer_label.config(text=f"⏱ Temps restant : {remaining}s")
+    if remaining > 0:
+        root.after(1000, update_timer)
+    else:
+        timer_label.config(text="⏰ Temps écoulé !")
+        timer_running = False
+
+# ------------------ Changer le fond selon la recette ------------------
+def change_background_for_dish(dish):
+    colors = {
+        "salad": "lightgreen",
+        "burger": "orange",
+        "omelette": "lightyellow",
+        "grilled_fish": "lightblue",
+        "sandwich": "beige",
+        "chicken_salad": "lightcoral",
+        "veggie_soup": "lightpink"
+    }
+    canvas.config(bg=colors.get(dish, "lightblue"))
 
 # ------------------ Préparer le plat via un seul agent ------------------
 def prepare_dish(dish_order, chef_agent, ingredients_shapes, output_widget, prep_pos, counter_pos, counter_shape):
+    global timer_running, start_time
     output_widget.delete("1.0", tk.END)
 
     if dish_order not in recipes:
         output_widget.insert(tk.END, " Sorry, we don't know that recipe.\n")
         return
+
+    reset_ingredients_colors()  # 🟢 Réinitialiser avant chaque préparation
+    change_background_for_dish(dish_order)
+    start_timer()  # Lancer le chrono
 
     recipe = recipes[dish_order]
     required_ingredients = recipe["ingredients"]
@@ -132,11 +197,10 @@ def prepare_dish(dish_order, chef_agent, ingredients_shapes, output_widget, prep
             chef_agent.move_to(x1, y1)
             chef_agent.pick_ingredient(ingredients_shapes[ing], ing)
 
-    # Plan de travail
     chef_agent.move_to(prep_pos[0], prep_pos[1])
     cours_text = canvas.create_text(
-        (prep_pos[0]+prep_pos[0]+150)//2,
-        prep_pos[1]+20,
+        (prep_pos[0] + prep_pos[0] + 150) // 2,
+        prep_pos[1] + 20,
         text="En cours...",
         font=("Arial", 12, "bold"),
         fill="black"
@@ -150,18 +214,33 @@ def prepare_dish(dish_order, chef_agent, ingredients_shapes, output_widget, prep
 
     canvas.delete(cours_text)
     canvas.update()
-
-    # Comptoir
     chef_agent.move_to(counter_pos[0], counter_pos[1])
     chef_agent.serve(counter_shape)
 
+# ------------------ Nouvelle commande aléatoire ------------------
+score = 0
+timer_running = False
+start_time = 0
+
+def generate_random_order():
+    return random.choice(list(recipes.keys()))
+
+def start_order():
+    if timer_running:
+        return
+    reset_ingredients_colors()  # 🟢 Réinitialiser aussi ici
+    order = generate_random_order()
+    entry.delete(0, tk.END)
+    entry.insert(0, order)
+    output.insert(tk.END, f"Nouvelle commande : {order.upper()} !\n")
+    output.yview_moveto(1)
+    prepare_dish(order, chef1, ingredients_shapes, output, (prep_x1, prep_y1), (counter_x1, counter_y1), counter)
 
 # ------------------ TKINTER GUI ------------------
 root = tk.Tk()
 root.title("Overcooked Switch game")
-root.geometry("900x600")
+root.geometry("900x700")
 
-# Frame principale avec scrollbar
 main_frame = tk.Frame(root)
 main_frame.pack(fill="both", expand=True)
 
@@ -174,34 +253,33 @@ scrollbar.pack(side="right", fill="y")
 main_canvas.configure(yscrollcommand=scrollbar.set)
 main_canvas.bind('<Configure>', lambda e: main_canvas.configure(scrollregion=main_canvas.bbox("all")))
 
-# Frame interne pour tous les widgets
 content_frame = tk.Frame(main_canvas)
-main_canvas.create_window((0,0), window=content_frame, anchor="nw")
+main_canvas.create_window((0, 0), window=content_frame, anchor="nw")
 
-# --- Interface ---
-title_label = tk.Label(content_frame, text="Overcooked Switch game", font=("Arial", 24, "bold"))
+title_label = tk.Label(content_frame, text="Overcooked Switch game 🍳", font=("Arial", 24, "bold"))
 title_label.pack(pady=10)
 
 entry = tk.Entry(content_frame, font=("Arial", 14))
 entry.pack(pady=5)
 
-# Zone de texte
+timer_label = tk.Label(content_frame, text="⏱ Temps restant : 60s", font=("Arial", 14, "bold"), fg="red")
+timer_label.pack(pady=5)
+
+score_label = tk.Label(content_frame, text="Score : 0", font=("Arial", 14, "bold"), fg="green")
+score_label.pack(pady=5)
+
 output = tk.Text(content_frame, height=15, width=60, font=("Arial", 12))
 output.pack(pady=10)
 
-# Canvas pour chef et ingrédients
 canvas = tk.Canvas(content_frame, width=850, height=400, bg="lightblue")
 canvas.pack(pady=10)
 
-# Chef 1 (rouge)
 chef1_shape = canvas.create_rectangle(20, 350, 60, 390, fill="red")
 chef1 = ChefAgent(canvas, chef1_shape, output, name="Chef 1")
 
-# Chef 2 (bleu)
 chef2_shape = canvas.create_rectangle(100, 350, 140, 390, fill="blue")
 chef2 = ChefAgent(canvas, chef2_shape, output, name="Chef 2")
 
-# Ingrédients
 ingredients_shapes = {}
 rows = 2
 cols = (len(available_ingredients) + 1) // 2
@@ -220,26 +298,17 @@ for i, ing in enumerate(available_ingredients):
     ingredients_shapes[ing] = canvas.create_rectangle(x1, y1, x2, y2, fill="white")
     canvas.create_text((x1 + x2)//2, y1 - 10, text=ing, font=("Arial", 10, "bold"))
 
-# Plan de travail
-prep_x1 = 350
-prep_y1 = 350
-prep_x2 = 500
-prep_y2 = 390
+prep_x1, prep_y1, prep_x2, prep_y2 = 350, 350, 500, 390
 prep_area = canvas.create_rectangle(prep_x1, prep_y1, prep_x2, prep_y2, fill="grey")
 canvas.create_text((prep_x1 + prep_x2)//2, prep_y1 - 10, text="Plan de travail", font=("Arial", 12, "bold"))
 
-# Comptoir
-counter_x1 = 750
-counter_y1 = 50
-counter_x2 = 800
-counter_y2 = 150
+counter_x1, counter_y1, counter_x2, counter_y2 = 750, 50, 800, 150
 counter = canvas.create_rectangle(counter_x1, counter_y1, counter_x2, counter_y2, fill="white")
 canvas.create_text((counter_x1 + counter_x2)//2, counter_y1 - 10, text="Comptoir", font=("Arial", 12, "bold"))
 
-# Bouton pour un seul chef
 button_single = tk.Button(
     content_frame,
-    text="Prepare Dish (Chef 1)",
+    text="Préparer le plat (Chef 1)",
     font=("Arial", 14),
     command=lambda: prepare_dish(
         entry.get().strip().lower(),
@@ -253,10 +322,17 @@ button_single = tk.Button(
 )
 button_single.pack(pady=5)
 
-# Bouton coopération
+button_random = tk.Button(
+    content_frame,
+    text="Nouvelle commande aléatoire 🍽️",
+    font=("Arial", 14),
+    command=start_order
+)
+button_random.pack(pady=5)
+
 button_coop = tk.Button(
     content_frame,
-    text="Prepare Together (Chef 1 + Chef 2)",
+    text="Préparer ensemble (Chef 1 + Chef 2)",
     font=("Arial", 14),
     command=lambda: chef1.cooperate(
         chef2,
