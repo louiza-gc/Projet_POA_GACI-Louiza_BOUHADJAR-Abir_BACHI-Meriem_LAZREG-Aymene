@@ -69,11 +69,11 @@ class ChefAgent:
     def serve(self, counter_shape):
         global start_time, score, timer_running
 
-        # ✅ Stop le minuteur dès que le plat est servi
+        # Stop le minuteur dès que le plat est servi
         end_time = time.time()
         elapsed = int(end_time - start_time)
         timer_running = False
-        timer_label.config(text=f"✅ Commande servie en {elapsed}s")
+        timer_label.config(text=f"Commande servie en {elapsed}s")
 
         # Calcul du score
         bonus = max(0, (60 - elapsed) // 5)  # Bonus si rapide
@@ -100,7 +100,7 @@ class ChefAgent:
             self.output.insert(tk.END, "Recette inconnue...\n")
             return
 
-        reset_ingredients_colors()  # 🟢 Réinitialiser les ingrédients avant une commande
+        reset_ingredients_colors()  # Réinitialiser les ingrédients avant une commande
         start_timer()  # Lancer le chrono
 
         recipe = recipes[dish_order]
@@ -158,7 +158,7 @@ def update_timer():
     if remaining > 0:
         root.after(1000, update_timer)
     else:
-        timer_label.config(text="⏰ Temps écoulé !")
+        timer_label.config(text=" Temps écoulé !")
         timer_running = False
 
 # ------------------ Changer le fond selon la recette ------------------
@@ -183,7 +183,7 @@ def prepare_dish(dish_order, chef_agent, ingredients_shapes, output_widget, prep
         output_widget.insert(tk.END, " Sorry, we don't know that recipe.\n")
         return
 
-    reset_ingredients_colors()  # 🟢 Réinitialiser avant chaque préparation
+    reset_ingredients_colors()  # Réinitialiser avant chaque préparation
     change_background_for_dish(dish_order)
     start_timer()  # Lancer le chrono
 
@@ -228,7 +228,7 @@ def generate_random_order():
 def start_order():
     if timer_running:
         return
-    reset_ingredients_colors()  # 🟢 Réinitialiser aussi ici
+    reset_ingredients_colors()  #  Réinitialiser aussi ici
     order = generate_random_order()
     entry.delete(0, tk.END)
     entry.insert(0, order)
@@ -256,7 +256,7 @@ main_canvas.bind('<Configure>', lambda e: main_canvas.configure(scrollregion=mai
 content_frame = tk.Frame(main_canvas)
 main_canvas.create_window((0, 0), window=content_frame, anchor="nw")
 
-title_label = tk.Label(content_frame, text="Overcooked Switch game 🍳", font=("Arial", 24, "bold"))
+title_label = tk.Label(content_frame, text="Overcooked Switch game", font=("Arial", 24, "bold"))
 title_label.pack(pady=10)
 
 entry = tk.Entry(content_frame, font=("Arial", 14))
@@ -324,7 +324,7 @@ button_single.pack(pady=5)
 
 button_random = tk.Button(
     content_frame,
-    text="Nouvelle commande aléatoire 🍽️",
+    text="Nouvelle commande aléatoire ",
     font=("Arial", 14),
     command=start_order
 )
