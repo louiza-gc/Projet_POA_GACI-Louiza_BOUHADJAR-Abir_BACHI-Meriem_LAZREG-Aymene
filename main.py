@@ -40,20 +40,31 @@ class ChefAgent:
         self.name = name
         self.x, self.y = self.canvas.coords(self.chef)[:2]
 
+    
     def move_to(self, target_x, target_y, speed=5):
         while True:
-            cx1, cy1, cx2, cy2 = self.canvas.coords(self.chef)
+            coords = self.canvas.coords(self.chef)
+
+            # Vérifier si c'est une image (2 valeurs) ou un rectangle (4 valeurs)
+            if len(coords) == 2:
+                cx, cy = coords
+            else:
+                cx = (coords[0] + coords[2]) / 2
+                cy = (coords[1] + coords[3]) / 2
+
             dx = dy = 0
-            if cx1 < target_x:
-                dx = min(speed, target_x - cx1)
-            elif cx1 > target_x:
-                dx = -min(speed, cx1 - target_x)
-            if cy1 < target_y:
-                dy = min(speed, target_y - cy1)
-            elif cy1 > target_y:
-                dy = -min(speed, cy1 - target_y)
+            if cx < target_x:
+                dx = min(speed, target_x - cx)
+            elif cx > target_x:
+                dx = -min(speed, cx - target_x)
+            if cy < target_y:
+                dy = min(speed, target_y - cy)
+            elif cy > target_y:
+                dy = -min(speed, cy - target_y)
+
             if dx == 0 and dy == 0:
                 break
+
             self.canvas.move(self.chef, dx, dy)
             self.canvas.update()
             time.sleep(0.01)
@@ -436,11 +447,20 @@ output.pack(pady=10)
 canvas = tk.Canvas(content_frame, width=850, height=400, bg="lightblue")
 canvas.pack(pady=10)
 
-# Chefs
-chef1_shape = canvas.create_rectangle(20, 350, 60, 390, fill="red")
-chef1 = ChefAgent(canvas, chef1_shape, output, name="Chef 1")
+# Charger les images
+chef1_img = tk.PhotoImage(file="chef1.png")
+chef2_img = tk.PhotoImage(file="chef2.png")  # nouvelle image pour chef2
 
-chef2_shape = canvas.create_rectangle(100, 350, 140, 390, fill="blue")
+# Créer les images sur le canvas
+chef1_shape = canvas.create_image(20, 350, image=chef1_img, anchor="nw")
+chef2_shape = canvas.create_image(100, 350, image=chef2_img, anchor="nw")
+
+# Garder une référence aux images pour éviter le garbage collector
+canvas.chef1_img = chef1_img
+canvas.chef2_img = chef2_img
+
+# Créer les agents
+chef1 = ChefAgent(canvas, chef1_shape, output, name="Chef 1")
 chef2 = ChefAgent(canvas, chef2_shape, output, name="Chef 2")
 
 # Ingredients
