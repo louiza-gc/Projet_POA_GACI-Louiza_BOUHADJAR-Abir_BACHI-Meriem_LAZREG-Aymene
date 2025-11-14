@@ -82,6 +82,7 @@ class ChefAgent:
 
 
         global recipes_count
+        
         recipes_count += 1
         score_label.config(text=f"Recettes servies : {recipes_count}")
 
@@ -242,36 +243,110 @@ def start_test_solo_30s():
 
 
 def start_test_coop_30s():
-    global test_mode, test_count, test_end_time, test_timer_running
+    """
+    Lance des "Préparer ensemble" une par une pendant 30s.
+    Chaque coopération crée deux threads (un pour chaque chef) et on attend leur fin
+    avant de lancer la suivante. UI updates (entry/output) sont faites via root.after.
+    """
+    global test_mode, test_timer_running
 
+    # si un autre timer ou test est déjà en cours -> on sort
     if timer_running or test_timer_running:
         return
 
+    # mode test : évite popups / arrêts de timer normaux
     test_mode = True
-    test_count = 0
-    test_end_time = time.time() + 30
-
+    # démarre le compteur visuel du test
+    timer_label.config(text="⏱ Test : 30s")
     start_test_timer()
 
-    output.insert(tk.END, "=== TEST SOLO 30s : DÉBUT ===\n")
+    # message d'ouverture dans le champ output (on est dans le thread UI quand on clique)
+    output.insert(tk.END, "=== TEST COOP 30s : DÉBUT ===\n")
+    output.yview_moveto(1)
 
-    def loop():
-        global test_count, test_mode
-        while time.time() < test_end_time:
+    # Worker principal du test — tournant dans un thread séparé pour ne pas bloquer l'UI
+    def test_worker():
+        end_time = time.time() + 30
+        completed = 0
+
+        while time.time() < end_time:
+            # tirer une recette aléatoire
             order = generate_random_order()
 
-            # ➤ Affichage dans l'input
-            entry.delete(0, tk.END)
-            entry.insert(0, order)
+            # Mettre à jour l'UI (entry + output) depuis le thread principal
+            def ui_update(o=order):
+                entry.delete(0, tk.END)
+                entry.insert(0, o)
+                output.insert(tk.END, f"\nTest : recette {o.upper()} (coop)\n")
+                output.yview_moveto(1)
+            root.after(0, ui_update)
 
-            output.insert(tk.END, f"\nTest : recette {order.upper()} (coop)\n")
-            chef1.cooperate(chef2, order, ingredients_shapes, (prep_x1, prep_y1), (counter_x1, counter_y1), counter)
-            test_count += 1
+            # Récupérer la recette et ses étapes
+            recipe = recipes.get(order)
+            if not recipe:
+                # si recette inconnue (peu probable), on passe à la suivante
+                continue
+            required_ingredients = recipe["ingredients"]
+            methods = recipe["methods"]
 
-        test_mode = False
-        output.insert(tk.END, f"\n=== FIN TEST COOP : {test_count} plats préparés ===\n")
+            # --- définir les tâches des deux chefs (même logique que dans ChefAgent.cooperate) ---
+            def chef1_task():
+                for i, ing in enumerate(required_ingredients):
+                    if i % 2 == 0:
+                        x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
+                        chef1.move_to(x1, y1)
+                        chef1.pick_ingredient(ingredients_shapes[ing], ing)
 
-    run_in_thread(loop)
+                chef1.move_to(prep_x1, prep_y1)
+                for ing in required_ingredients:
+                    if ing in methods:
+                        for action in methods[ing]:
+                            chef1.perform_method(ing, action)
+
+            def chef2_task():
+                for i, ing in enumerate(required_ingredients):
+                    if i % 2 == 1:
+                        x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
+                        chef2.move_to(x1, y1)
+                        chef2.pick_ingredient(ingredients_shapes[ing], ing)
+
+                chef2.move_to(prep_x1 + 50, prep_y1)
+                time.sleep(1)
+
+                chef2.move_to(counter_x1, counter_y1)
+                chef2.serve(counter)
+
+            # lancer les deux threads pour la coopération (comme dans cooperate)
+            t1 = threading.Thread(target=chef1_task)
+            t2 = threading.Thread(target=chef2_task)
+            t1.start()
+            t2.start()
+
+            # attendre la fin des deux chefs (bloque uniquement ce worker thread)
+            t1.join()
+            t2.join()
+
+            # Si on arrive ici, la coopération est terminée — incrémenter le compteur
+            completed += 1
+
+            # Si le temps est écoulé, on ne lance pas la suivante (la boucle while le gère)
+            # petite pause pour éviter une boucle trop serrée si nécessaire
+            time.sleep(0.02)
+
+        # Fin du test : désactiver le mode test et afficher le résultat dans le thread principal
+        def finish_ui():
+            global test_mode
+            test_mode = False
+            output.insert(tk.END, f"\n=== FIN TEST COOP : {completed} plats préparés ===\n")
+            output.yview_moveto(1)
+            # Le timer de test sera arrêté naturellement par update_test_timer() quand il arrive à 0,
+            # mais pour sécurité on peut forcer l'affichage final
+            timer_label.config(text="⏱ Test terminé !")
+        root.after(0, finish_ui)
+
+    # lancer le worker du test dans un thread (ne bloque pas l'UI)
+    run_in_thread(test_worker)
+
 
 
 def generate_random_order():
@@ -396,6 +471,13 @@ counter_x1, counter_y1, counter_x2, counter_y2 = 750, 50, 800, 150
 counter = canvas.create_rectangle(counter_x1, counter_y1, counter_x2, counter_y2, fill="white")
 canvas.create_text((counter_x1 + counter_x2)//2, counter_y1 - 10, text="Comptoir", font=("Arial", 12))
 
+
+def reset_plats_prepared():
+    global recipes_count
+    recipes_count = 0
+    score_label.config(text=f"Recettes servies : {recipes_count}")
+
+
 # Buttons
 tk.Button(
     content_frame,
@@ -441,14 +523,20 @@ tk.Button(
     content_frame,
     text="Test 30s (Solo) 🚀",
     font=("Arial", 14),
-    command=start_test_solo_30s
+    command=lambda: (
+        reset_plats_prepared(),
+        start_test_solo_30s()
+    )
 ).pack(pady=5)
 
 tk.Button(
     content_frame,
     text="Test 30s (Coop) 🤝",
     font=("Arial", 14),
-    command=start_test_coop_30s
+    command=lambda: (
+        reset_plats_prepared(),
+        start_test_coop_30s()
+    )
 ).pack(pady=5)
 
 
