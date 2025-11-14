@@ -10,6 +10,8 @@ available_ingredients = [
     "cheese", "bread", "cucumber", "lemon", "lettuce"
 ]
 
+
+
 # ------------------ Fenêtre commande servie ------------------
 def show_order_served():
     served_window = tk.Toplevel()
@@ -74,19 +76,23 @@ class ChefAgent:
 
         end_time = time.time()
         elapsed = int(end_time - start_time)
-        timer_running = False
-        timer_label.config(text=f"✔ Commande servie en {elapsed}s")
+        if not test_mode:
+            timer_running = False
+            timer_label.config(text=f"✔ Commande servie en {elapsed}s")
 
-        bonus = max(0, (60 - elapsed) // 5)
-        points = 20 + bonus if elapsed < 60 else 10
-        score += points
-        score_label.config(text=f"Score : {score}")
 
-        canvas.itemconfig(counter_shape, fill="red")
-        self.output.insert(tk.END, f"\n{self.name} a servi le plat ! +{points} points\n")
+        global recipes_count
+        recipes_count += 1
+        score_label.config(text=f"Recettes servies : {recipes_count}")
+
+        self.output.insert(tk.END, f"\n{self.name} a servi un plat !\n")
+
         self.output.yview_moveto(1)
         canvas.update()
-        show_order_served()
+        # Ne pas afficher la fenêtre en mode test
+        if not test_mode:
+            show_order_served()
+
 
     # ---------------- COOPÉRATION PARALLÈLE ------------------
     def cooperate(self, other_agent, dish_order, ingredients_shapes, prep_pos, counter_pos, counter_shape):
@@ -162,10 +168,111 @@ def update_timer():
         timer_running = False
         timer_label.config(text="⛔ Temps écoulé !")
 
+
+def start_test_timer():
+    global test_timer_running, test_start_time
+    test_timer_running = True
+    test_start_time = time.time()
+    update_test_timer()
+
+def update_test_timer():
+    global test_timer_running, test_start_time
+
+    if not test_timer_running:
+        return
+
+    elapsed = int(time.time() - test_start_time)
+    remaining = max(0, 30 - elapsed)
+
+    timer_label.config(text=f"⏱ Test : {remaining}s")
+
+    if remaining > 0:
+        root.after(1000, update_test_timer)
+    else:
+        test_timer_running = False
+        timer_label.config(text="⏱ Test terminé !")
+
 # ------------------ Commande aléatoire ------------------
-score = 0
+recipes_count = 0
 timer_running = False
 start_time = 0
+
+test_mode = False
+test_count = 0
+test_end_time = 0
+
+test_timer_running = False
+test_start_time = 0
+
+
+def start_test_solo_30s():
+    global test_mode, test_count, test_end_time, test_timer_running
+
+    if timer_running or test_timer_running:
+        return
+
+    test_mode = True
+    test_count = 0
+    test_end_time = time.time() + 30
+
+    # Affiche 30s immédiatement
+    timer_label.config(text="⏱ Test : 30s")
+
+    start_test_timer()
+
+    output.insert(tk.END, "=== TEST SOLO 30s : DÉBUT ===\n")
+
+    def loop():
+        global test_count, test_mode
+        while time.time() < test_end_time:
+            order = generate_random_order()
+
+            # ➤ Affichage dans le champ texte
+            entry.delete(0, tk.END)
+            entry.insert(0, order)
+
+            output.insert(tk.END, f"\nTest : recette {order.upper()}\n")
+            prepare_dish(order, chef1, ingredients_shapes, output, (prep_x1, prep_y1), (counter_x1, counter_y1), counter)
+            test_count += 1
+
+        test_mode = False
+        output.insert(tk.END, f"\n=== FIN TEST SOLO : {test_count} plats préparés ===\n")
+
+    run_in_thread(loop)
+
+
+def start_test_coop_30s():
+    global test_mode, test_count, test_end_time, test_timer_running
+
+    if timer_running or test_timer_running:
+        return
+
+    test_mode = True
+    test_count = 0
+    test_end_time = time.time() + 30
+
+    start_test_timer()
+
+    output.insert(tk.END, "=== TEST SOLO 30s : DÉBUT ===\n")
+
+    def loop():
+        global test_count, test_mode
+        while time.time() < test_end_time:
+            order = generate_random_order()
+
+            # ➤ Affichage dans l'input
+            entry.delete(0, tk.END)
+            entry.insert(0, order)
+
+            output.insert(tk.END, f"\nTest : recette {order.upper()} (coop)\n")
+            chef1.cooperate(chef2, order, ingredients_shapes, (prep_x1, prep_y1), (counter_x1, counter_y1), counter)
+            test_count += 1
+
+        test_mode = False
+        output.insert(tk.END, f"\n=== FIN TEST COOP : {test_count} plats préparés ===\n")
+
+    run_in_thread(loop)
+
 
 def generate_random_order():
     return random.choice(list(recipes.keys()))
@@ -191,7 +298,9 @@ def prepare_dish(dish_order, chef_agent, ingredients_shapes, output_widget, prep
         return
 
     reset_ingredients_colors()
-    start_timer()
+    if not test_mode:
+        start_timer()
+
 
     recipe = recipes[dish_order]
     required_ingredients = recipe["ingredients"]
@@ -239,10 +348,11 @@ title_label.pack(pady=10)
 entry = tk.Entry(content_frame, font=("Arial", 14))
 entry.pack(pady=5)
 
+
 timer_label = tk.Label(content_frame, text="⏱ Temps restant : 60s", font=("Arial", 14, "bold"), fg="red")
 timer_label.pack(pady=5)
 
-score_label = tk.Label(content_frame, text="Score : 0", font=("Arial", 14, "bold"), fg="green")
+score_label = tk.Label(content_frame, text="Recettes servies : 0", font=("Arial", 14, "bold"), fg="green")
 score_label.pack(pady=5)
 
 output = tk.Text(content_frame, height=15, width=60, font=("Arial", 12))
@@ -326,5 +436,20 @@ tk.Button(
         )
     )
 ).pack(pady=5)
+
+tk.Button(
+    content_frame,
+    text="Test 30s (Solo) 🚀",
+    font=("Arial", 14),
+    command=start_test_solo_30s
+).pack(pady=5)
+
+tk.Button(
+    content_frame,
+    text="Test 30s (Coop) 🤝",
+    font=("Arial", 14),
+    command=start_test_coop_30s
+).pack(pady=5)
+
 
 root.mainloop()
