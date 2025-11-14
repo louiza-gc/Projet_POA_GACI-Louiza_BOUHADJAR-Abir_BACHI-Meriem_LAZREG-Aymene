@@ -15,7 +15,7 @@ available_ingredients = [
 # ------------------ Fenêtre commande servie ------------------
 def show_order_served():
     served_window = tk.Toplevel()
-    served_window.title("Commande servie !")
+    served_window.title("Commande servie !!")
     served_window.geometry("300x150")
     tk.Label(served_window, text="Commande servie !", font=("Arial", 24)).pack(expand=True)
 
