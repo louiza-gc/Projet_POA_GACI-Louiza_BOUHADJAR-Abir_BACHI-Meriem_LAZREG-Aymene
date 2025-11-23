@@ -3,6 +3,8 @@ import time
 import random
 import threading
 from recipes import recipes  # fichier recipes.py
+from tkinter import ttk
+
 
 available_ingredients = [
     "salad", "tomato", "onion", "carrot", "pepper",
@@ -411,7 +413,8 @@ def prepare_dish(dish_order, chef_agent, ingredients_shapes, output_widget, prep
 # ------------------ GUI TKINTER ------------------
 root = tk.Tk()
 root.title("Overcooked Multijoueur Coop")
-root.geometry("900x700")
+root.geometry("1250x700")
+root.resizable(False, False)
 
 main_frame = tk.Frame(root)
 main_frame.pack(fill="both", expand=True)
@@ -419,11 +422,11 @@ main_frame.pack(fill="both", expand=True)
 main_canvas = tk.Canvas(main_frame)
 main_canvas.pack(side="left", fill="both", expand=True)
 
-scrollbar = tk.Scrollbar(main_frame, orient="vertical", command=main_canvas.yview)
-scrollbar.pack(side="right", fill="y")
 
-main_canvas.configure(yscrollcommand=scrollbar.set)
-main_canvas.bind('<Configure>', lambda e: main_canvas.configure(scrollregion=main_canvas.bbox("all")))
+
+# === PANEL À DROITE POUR LES BOUTONS ===
+buttons_frame = tk.Frame(main_frame, padx=10, pady=10, bg="lightgrey")
+buttons_frame.pack(side="right", fill="y")
 
 content_frame = tk.Frame(main_canvas)
 main_canvas.create_window((0, 0), window=content_frame, anchor="nw")
@@ -431,8 +434,22 @@ main_canvas.create_window((0, 0), window=content_frame, anchor="nw")
 title_label = tk.Label(content_frame, text="Overcooked Multijoueur Coop 🧑‍🍳👩‍🍳", font=("Arial", 24, "bold"))
 title_label.pack(pady=10)
 
-entry = tk.Entry(content_frame, font=("Arial", 14))
-entry.pack(pady=5)
+# Liste des plats depuis recipes
+dish_names = list(recipes.keys())
+
+# Drop-list pour sélectionner un plat
+entry = ttk.Combobox(
+    buttons_frame,
+    values=dish_names,
+    font=("Arial", 14),
+    state="readonly"
+)
+entry.pack(pady=5, fill="x")
+
+# Optionnel : sélectionne le 1er plat par défaut
+entry.set(dish_names[0])
+
+
 
 
 timer_label = tk.Label(content_frame, text="⏱ Temps restant : 60s", font=("Arial", 14, "bold"), fg="red")
@@ -441,11 +458,14 @@ timer_label.pack(pady=5)
 score_label = tk.Label(content_frame, text="Recettes servies : 0", font=("Arial", 14, "bold"), fg="green")
 score_label.pack(pady=5)
 
-output = tk.Text(content_frame, height=15, width=60, font=("Arial", 12))
+output = tk.Text(buttons_frame, height=15, width=40, font=("Arial", 12))
 output.pack(pady=10)
 
 canvas = tk.Canvas(content_frame, width=850, height=400, bg="lightblue")
 canvas.pack(pady=10)
+
+
+
 
 # Charger les images
 chef1_img = tk.PhotoImage(file="chef1.png")
@@ -500,7 +520,7 @@ def reset_plats_prepared():
 
 # Buttons
 tk.Button(
-    content_frame,
+    buttons_frame,
     text="Préparer le plat (Chef 1)",
     font=("Arial", 14),
     command=lambda: run_in_thread(
@@ -517,14 +537,14 @@ tk.Button(
 ).pack(pady=5)
 
 tk.Button(
-    content_frame,
+    buttons_frame,
     text="Nouvelle commande aléatoire 🍽️",
     font=("Arial", 14),
     command=start_order
 ).pack(pady=5)
 
 tk.Button(
-    content_frame,
+    buttons_frame,
     text="Préparer ensemble (Chef 1 + Chef 2)",
     font=("Arial", 14),
     command=lambda: run_in_thread(
@@ -540,7 +560,7 @@ tk.Button(
 ).pack(pady=5)
 
 tk.Button(
-    content_frame,
+    buttons_frame,
     text="Test 30s (Solo) 🚀",
     font=("Arial", 14),
     command=lambda: (
@@ -550,7 +570,7 @@ tk.Button(
 ).pack(pady=5)
 
 tk.Button(
-    content_frame,
+    buttons_frame,
     text="Test 30s (Coop) 🤝",
     font=("Arial", 14),
     command=lambda: (
