@@ -1,64 +1,160 @@
 recipes = {
-    "salad": {
-        "ingredients": ["salad", "tomato", "onion", "cucumber"],
+    "pasta_bolognese": {
+        "ingredients": ["pasta", "beef", "tomato", "onion"],
         "methods": {
-            "salad": ["rinse", "tear"],
+            "pasta": ["boil"],
+            "beef": ["cook"],
             "tomato": ["rinse", "chop"],
-            "onion": ["peel", "chop"],
-            "cucumber": ["rinse", "slice"]
+            "onion": ["peel", "chop"]
         }
     },
-    "burger": {
-        "ingredients": ["bread", "beef", "cheese", "tomato", "onion"],
+    "fruit_salad": {
+        "ingredients": ["apple", "banana", "orange"],
+        "methods": {
+            "apple": ["rinse", "slice"],
+            "banana": ["peel", "slice"],
+            "orange": ["peel", "slice"]
+        }
+    },
+    "chicken_wrap": {
+        "ingredients": ["chicken", "lettuce", "tomato", "bread"],
+        "methods": {
+            "chicken": ["grill", "slice"],
+            "lettuce": ["rinse"],
+            "tomato": ["rinse", "slice"],
+            "bread": ["heat"]
+        }
+    },
+    "tuna_sandwich": {
+        "ingredients": ["bread", "tuna", "lettuce", "tomato"],
         "methods": {
             "bread": ["toast"],
+            "tuna": ["mix"],
+            "lettuce": ["rinse"],
+            "tomato": ["rinse", "slice"]
+        }
+    },
+    "pizza_margherita": {
+        "ingredients": ["bread", "tomato", "cheese"],
+        "methods": {
+            "bread": ["flatten"],
+            "tomato": ["chop", "cook"],
+            "cheese": ["grate"]
+        }
+    },
+    "scrambled_eggs": {
+        "ingredients": ["egg", "cheese"],
+        "methods": {
+            "egg": ["crack", "whisk", "cook"],
+            "cheese": ["grate"]
+        }
+    },
+    "beef_tacos": {
+        "ingredients": ["beef", "lettuce", "tomato", "bread"],
+        "methods": {
+            "beef": ["cook"],
+            "lettuce": ["rinse"],
+            "tomato": ["rinse", "chop"],
+            "bread": ["heat"]
+        }
+    },
+    "rice_bowl": {
+        "ingredients": ["rice", "chicken", "carrot"],
+        "methods": {
+            "rice": ["rinse", "boil"],
+            "chicken": ["grill", "slice"],
+            "carrot": ["peel", "slice"]
+        }
+    },
+    "french_toast": {
+        "ingredients": ["bread", "egg"],
+        "methods": {
+            "bread": ["soak"],
+            "egg": ["whisk", "coat", "cook"]
+        }
+    },
+    "steak_plate": {
+        "ingredients": ["beef", "onion"],
+        "methods": {
             "beef": ["grill"],
-            "cheese": ["slice"],
+            "onion": ["peel", "slice", "cook"]
+        }
+    },
+    "grilled_chicken": {
+        "ingredients": ["chicken", "lemon"],
+        "methods": {
+            "chicken": ["season", "grill"],
+            "lemon": ["slice"]
+        }
+    },
+    "veggie_rice": {
+        "ingredients": ["rice", "carrot", "pepper"],
+        "methods": {
+            "rice": ["boil"],
+            "carrot": ["peel", "slice"],
+            "pepper": ["rinse", "chop"]
+        }
+    },
+    "cheese_omelette": {
+        "ingredients": ["egg", "cheese"],
+        "methods": {
+            "egg": ["crack", "whisk", "cook"],
+            "cheese": ["grate"]
+        }
+    },
+    "pancakes": {
+        "ingredients": ["egg", "flour"],
+        "methods": {
+            "egg": ["crack", "whisk"],
+            "flour": ["mix"],
+        }
+    },
+    "grilled_vegetables": {
+        "ingredients": ["pepper", "onion", "tomato"],
+        "methods": {
+            "pepper": ["rinse", "slice", "grill"],
+            "onion": ["peel", "slice", "grill"],
+            "tomato": ["rinse", "slice", "grill"]
+        }
+    },
+    "stir_fry_chicken": {
+        "ingredients": ["chicken", "pepper", "onion"],
+        "methods": {
+            "chicken": ["slice", "cook"],
+            "pepper": ["rinse", "slice"],
+            "onion": ["peel", "chop"]
+        }
+    },
+    "simple_salad": {
+        "ingredients": ["lettuce", "tomato", "onion"],
+        "methods": {
+            "lettuce": ["rinse"],
             "tomato": ["rinse", "slice"],
             "onion": ["peel", "slice"]
         }
     },
-    "omelette": {
-        "ingredients": ["egg", "onion", "cheese"],
+    "fish_plate": {
+        "ingredients": ["fish", "lemon"],
         "methods": {
-            "egg": ["crack", "whisk", "cook"],
-            "onion": ["peel", "chop"],
+            "fish": ["clean", "cook"],
+            "lemon": ["slice"]
+        }
+    },
+    "chicken_pasta": {
+        "ingredients": ["pasta", "chicken", "cheese"],
+        "methods": {
+            "pasta": ["boil"],
+            "chicken": ["grill", "slice"],
             "cheese": ["grate"]
         }
     },
-    "grilled_fish": {
-        "ingredients": ["fish", "lemon", "onion"],
+    "veggie_wrap": {
+        "ingredients": ["bread", "lettuce", "cheese", "tomato"],
         "methods": {
-            "fish": ["clean", "season", "grill"],
-            "lemon": ["slice"],
-            "onion": ["chop"]
-        }
-    },
-    "sandwich": {
-        "ingredients": ["bread", "cheese", "tomato", "lettuce"],
-        "methods": {
-            "bread": ["toast"],
+            "bread": ["heat"],
+            "lettuce": ["rinse"],
             "cheese": ["slice"],
-            "tomato": ["rinse", "slice"],
-            "lettuce": ["rinse"]
-        }
-    },
-    "chicken_salad": {
-        "ingredients": ["chicken", "salad", "tomato", "cucumber"],
-        "methods": {
-            "chicken": ["grill", "slice"],
-            "salad": ["rinse", "tear"],
-            "tomato": ["rinse", "chop"],
-            "cucumber": ["rinse", "slice"]
-        }
-    },
-    "veggie_soup": {
-        "ingredients": ["carrot", "onion", "tomato", "pepper"],
-        "methods": {
-            "carrot": ["peel", "slice"],
-            "onion": ["peel", "chop"],
-            "tomato": ["rinse", "chop"],
-            "pepper": ["rinse", "chop"]
+            "tomato": ["rinse", "slice"]
         }
     }
 }
