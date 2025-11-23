@@ -5,26 +5,38 @@ import threading
 from recipes import recipes  # fichier recipes.py
 from tkinter import ttk
 
-
 available_ingredients = [
     "salad", "tomato", "onion", "carrot", "pepper",
     "chicken", "beef", "fish", "egg",
     "cheese", "bread", "cucumber", "lemon", "lettuce"
 ]
 
-
+# Variables globales pour contrôler l'exécution des tests
+test_mode = False
+test_timer_running = False
+test_start_time = 0
+test_count = 0
+stop_test_flag = False  # Nouveau flag pour arrêter les tests
 
 # ------------------ Fenêtre commande servie ------------------
 def show_order_served():
-    served_window = tk.Toplevel()
-    served_window.title("Commande servie !!")
-    served_window.geometry("300x150")
-    tk.Label(served_window, text="Commande servie !", font=("Arial", 24)).pack(expand=True)
+    if not test_mode:  # Ne pas afficher en mode test
+        served_window = tk.Toplevel()
+        served_window.title("Commande servie !!")
+        served_window.geometry("300x150")
+        tk.Label(served_window, text="Commande servie !", font=("Arial", 24)).pack(expand=True)
 
 # ------------------ Réinitialisation ------------------
 def reset_ingredients_colors():
     for ing_shape in ingredients_shapes.values():
         canvas.itemconfig(ing_shape, fill="white")
+    canvas.update()
+
+# ------------------ Réinitialisation position chefs ------------------
+def reset_chefs_position():
+    """Réinitialise les chefs à leur position de départ"""
+    canvas.coords(chef1_shape, 20, 350)
+    canvas.coords(chef2_shape, 100, 350)
     canvas.update()
 
 # ------------------ THREAD UTILITY ------------------
@@ -42,9 +54,12 @@ class ChefAgent:
         self.name = name
         self.x, self.y = self.canvas.coords(self.chef)[:2]
 
-    
     def move_to(self, target_x, target_y, speed=5):
         while True:
+            # Vérifier si le test doit s'arrêter
+            if stop_test_flag:
+                return
+                
             coords = self.canvas.coords(self.chef)
 
             # Vérifier si c'est une image (2 valeurs) ou un rectangle (4 valeurs)
@@ -67,11 +82,17 @@ class ChefAgent:
             if dx == 0 and dy == 0:
                 break
 
+            # Vérifier à nouveau avant de déplacer
+            if stop_test_flag:
+                return
+                
             self.canvas.move(self.chef, dx, dy)
             self.canvas.update()
             time.sleep(0.01)
 
     def pick_ingredient(self, ingredient_shape, ing_name):
+        if stop_test_flag:
+            return
         self.output.insert(tk.END, f"{self.name} prend {ing_name}...\n")
         self.output.yview_moveto(1)
         canvas.itemconfig(ingredient_shape, fill="green")
@@ -79,6 +100,8 @@ class ChefAgent:
         time.sleep(0.4)
 
     def perform_method(self, ing_name, method):
+        if stop_test_flag:
+            return
         self.output.insert(tk.END, f"{self.name} {method} {ing_name}...\n")
         self.output.yview_moveto(1)
         canvas.update()
@@ -87,26 +110,26 @@ class ChefAgent:
     def serve(self, counter_shape):
         global start_time, score, timer_running
 
+        if stop_test_flag:
+            return
+
         end_time = time.time()
         elapsed = int(end_time - start_time)
         if not test_mode:
             timer_running = False
             timer_label.config(text=f"✔ Commande servie en {elapsed}s")
 
-
         global recipes_count
-        
         recipes_count += 1
         score_label.config(text=f"Recettes servies : {recipes_count}")
 
         self.output.insert(tk.END, f"\n{self.name} a servi un plat !\n")
-
         self.output.yview_moveto(1)
         canvas.update()
+        
         # Ne pas afficher la fenêtre en mode test
         if not test_mode:
             show_order_served()
-
 
     # ---------------- COOPÉRATION PARALLÈLE ------------------
     def cooperate(self, other_agent, dish_order, ingredients_shapes, prep_pos, counter_pos, counter_shape):
@@ -128,30 +151,31 @@ class ChefAgent:
         # ---------------- THREAD CHEF 1 ------------------
         def chef1_task():
             for i, ing in enumerate(required_ingredients):
-                if i % 2 == 0:
+                if i % 2 == 0 and not stop_test_flag:
                     x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
                     self.move_to(x1, y1)
                     self.pick_ingredient(ingredients_shapes[ing], ing)
 
-            self.move_to(prep_pos[0], prep_pos[1])
-            for ing in required_ingredients:
-                if ing in methods:
-                    for action in methods[ing]:
-                        self.perform_method(ing, action)
+            if not stop_test_flag:
+                self.move_to(prep_pos[0], prep_pos[1])
+                for ing in required_ingredients:
+                    if ing in methods and not stop_test_flag:
+                        for action in methods[ing]:
+                            self.perform_method(ing, action)
 
         # ---------------- THREAD CHEF 2 ------------------
         def chef2_task():
             for i, ing in enumerate(required_ingredients):
-                if i % 2 == 1:
+                if i % 2 == 1 and not stop_test_flag:
                     x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
                     other_agent.move_to(x1, y1)
                     other_agent.pick_ingredient(ingredients_shapes[ing], ing)
 
-            other_agent.move_to(prep_pos[0] + 50, prep_pos[1])
-            time.sleep(1)
-
-            other_agent.move_to(counter_pos[0], counter_pos[1])
-            other_agent.serve(counter_shape)
+            if not stop_test_flag:
+                other_agent.move_to(prep_pos[0] + 50, prep_pos[1])
+                time.sleep(1)
+                other_agent.move_to(counter_pos[0], counter_pos[1])
+                other_agent.serve(counter_shape)
 
         # ---------------- LANCEMENT PARALLÈLE ------------------
         t1 = threading.Thread(target=chef1_task)
@@ -182,7 +206,6 @@ def update_timer():
         timer_running = False
         timer_label.config(text="⛔ Temps écoulé !")
 
-
 def start_test_timer():
     global test_timer_running, test_start_time
     test_timer_running = True
@@ -190,7 +213,7 @@ def start_test_timer():
     update_test_timer()
 
 def update_test_timer():
-    global test_timer_running, test_start_time
+    global test_timer_running, test_start_time, stop_test_flag
 
     if not test_timer_running:
         return
@@ -203,28 +226,34 @@ def update_test_timer():
     if remaining > 0:
         root.after(1000, update_test_timer)
     else:
+        # Temps écoulé - arrêter le test
         test_timer_running = False
+        stop_test_flag = True
         timer_label.config(text="⏱ Test terminé !")
+        
+        # Réinitialiser les positions des chefs
+        reset_chefs_position()
+        
+        # Réinitialiser le flag après un court délai
+        root.after(100, lambda: setattr(globals(), 'stop_test_flag', False))
 
 # ------------------ Commande aléatoire ------------------
 recipes_count = 0
 timer_running = False
 start_time = 0
 
-test_mode = False
-test_count = 0
-test_end_time = 0
-
-test_timer_running = False
-test_start_time = 0
-
+def generate_random_order():
+    return random.choice(list(recipes.keys()))
 
 def start_test_solo_30s():
-    global test_mode, test_count, test_end_time, test_timer_running
+    global test_mode, test_count, test_end_time, test_timer_running, stop_test_flag
 
     if timer_running or test_timer_running:
         return
 
+    # Réinitialiser le flag d'arrêt
+    stop_test_flag = False
+    
     test_mode = True
     test_count = 0
     test_end_time = time.time() + 30
@@ -238,55 +267,64 @@ def start_test_solo_30s():
 
     def loop():
         global test_count, test_mode
-        while time.time() < test_end_time:
+        while time.time() < test_end_time and not stop_test_flag:
             order = generate_random_order()
 
             # ➤ Affichage dans le champ texte
-            entry.delete(0, tk.END)
-            entry.insert(0, order)
+            def update_ui(o=order):
+                entry.delete(0, tk.END)
+                entry.insert(0, o)
+                output.insert(tk.END, f"\nTest : recette {o.upper()}\n")
+                output.yview_moveto(1)
+            
+            root.after(0, update_ui)
 
-            output.insert(tk.END, f"\nTest : recette {order.upper()}\n")
-            prepare_dish(order, chef1, ingredients_shapes, output, (prep_x1, prep_y1), (counter_x1, counter_y1), counter)
-            test_count += 1
+            # Préparer le plat si le test n'est pas arrêté
+            if not stop_test_flag:
+                prepare_dish(order, chef1, ingredients_shapes, output, (prep_x1, prep_y1), (counter_x1, counter_y1), counter)
+                test_count += 1
 
-        test_mode = False
-        output.insert(tk.END, f"\n=== FIN TEST SOLO : {test_count} plats préparés ===\n")
+        # Fin du test
+        def finish_ui():
+            global test_mode
+            test_mode = False
+            output.insert(tk.END, f"\n=== FIN TEST SOLO : {test_count} plats préparés ===\n")
+            output.yview_moveto(1)
+        
+        if not stop_test_flag:  # Only show completion message if test wasn't stopped
+            root.after(0, finish_ui)
 
     run_in_thread(loop)
 
-
 def start_test_coop_30s():
-    """
-    Lance des "Préparer ensemble" une par une pendant 30s.
-    Chaque coopération crée deux threads (un pour chaque chef) et on attend leur fin
-    avant de lancer la suivante. UI updates (entry/output) sont faites via root.after.
-    """
-    global test_mode, test_timer_running
+    global test_mode, test_timer_running, stop_test_flag
 
-    # si un autre timer ou test est déjà en cours -> on sort
     if timer_running or test_timer_running:
         return
 
-    # mode test : évite popups / arrêts de timer normaux
+    # Réinitialiser le flag d'arrêt
+    stop_test_flag = False
+    
     test_mode = True
-    # démarre le compteur visuel du test
     timer_label.config(text="⏱ Test : 30s")
     start_test_timer()
 
-    # message d'ouverture dans le champ output (on est dans le thread UI quand on clique)
     output.insert(tk.END, "=== TEST COOP 30s : DÉBUT ===\n")
     output.yview_moveto(1)
 
-    # Worker principal du test — tournant dans un thread séparé pour ne pas bloquer l'UI
     def test_worker():
         end_time = time.time() + 30
         completed = 0
 
-        while time.time() < end_time:
-            # tirer une recette aléatoire
+        while time.time() < end_time and not stop_test_flag:
             order = generate_random_order()
+            recipe = recipes.get(order)
+            if not recipe:
+                continue
 
-            # Mettre à jour l'UI (entry + output) depuis le thread principal
+            required_ingredients = recipe["ingredients"]
+            methods = recipe["methods"]
+
             def ui_update(o=order):
                 entry.delete(0, tk.END)
                 entry.insert(0, o)
@@ -294,76 +332,58 @@ def start_test_coop_30s():
                 output.yview_moveto(1)
             root.after(0, ui_update)
 
-            # Récupérer la recette et ses étapes
-            recipe = recipes.get(order)
-            if not recipe:
-                # si recette inconnue (peu probable), on passe à la suivante
-                continue
-            required_ingredients = recipe["ingredients"]
-            methods = recipe["methods"]
-
-            # --- définir les tâches des deux chefs (même logique que dans ChefAgent.cooperate) ---
+            # --- définir les tâches des deux chefs ---
             def chef1_task():
                 for i, ing in enumerate(required_ingredients):
-                    if i % 2 == 0:
+                    if i % 2 == 0 and not stop_test_flag:
                         x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
                         chef1.move_to(x1, y1)
                         chef1.pick_ingredient(ingredients_shapes[ing], ing)
 
-                chef1.move_to(prep_x1, prep_y1)
-                for ing in required_ingredients:
-                    if ing in methods:
-                        for action in methods[ing]:
-                            chef1.perform_method(ing, action)
+                if not stop_test_flag:
+                    chef1.move_to(prep_x1, prep_y1)
+                    for ing in required_ingredients:
+                        if ing in methods and not stop_test_flag:
+                            for action in methods[ing]:
+                                chef1.perform_method(ing, action)
 
             def chef2_task():
                 for i, ing in enumerate(required_ingredients):
-                    if i % 2 == 1:
+                    if i % 2 == 1 and not stop_test_flag:
                         x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
                         chef2.move_to(x1, y1)
                         chef2.pick_ingredient(ingredients_shapes[ing], ing)
 
-                chef2.move_to(prep_x1 + 50, prep_y1)
-                time.sleep(1)
+                if not stop_test_flag:
+                    chef2.move_to(prep_x1 + 50, prep_y1)
+                    time.sleep(1)
+                    chef2.move_to(counter_x1, counter_y1)
+                    chef2.serve(counter)
 
-                chef2.move_to(counter_x1, counter_y1)
-                chef2.serve(counter)
-
-            # lancer les deux threads pour la coopération (comme dans cooperate)
+            # lancer les deux threads pour la coopération
             t1 = threading.Thread(target=chef1_task)
             t2 = threading.Thread(target=chef2_task)
             t1.start()
             t2.start()
 
-            # attendre la fin des deux chefs (bloque uniquement ce worker thread)
+            # attendre la fin des deux chefs
             t1.join()
             t2.join()
 
-            # Si on arrive ici, la coopération est terminée — incrémenter le compteur
-            completed += 1
+            if not stop_test_flag:
+                completed += 1
 
-            # Si le temps est écoulé, on ne lance pas la suivante (la boucle while le gère)
-            # petite pause pour éviter une boucle trop serrée si nécessaire
             time.sleep(0.02)
 
-        # Fin du test : désactiver le mode test et afficher le résultat dans le thread principal
+        # Fin du test
         def finish_ui():
             global test_mode
             test_mode = False
             output.insert(tk.END, f"\n=== FIN TEST COOP : {completed} plats préparés ===\n")
             output.yview_moveto(1)
-            # Le timer de test sera arrêté naturellement par update_test_timer() quand il arrive à 0,
-            # mais pour sécurité on peut forcer l'affichage final
-            timer_label.config(text="⏱ Test terminé !")
         root.after(0, finish_ui)
 
-    # lancer le worker du test dans un thread (ne bloque pas l'UI)
     run_in_thread(test_worker)
-
-
-
-def generate_random_order():
-    return random.choice(list(recipes.keys()))
 
 def start_order():
     if timer_running:
@@ -389,26 +409,37 @@ def prepare_dish(dish_order, chef_agent, ingredients_shapes, output_widget, prep
     if not test_mode:
         start_timer()
 
-
     recipe = recipes[dish_order]
     required_ingredients = recipe["ingredients"]
     methods = recipe["methods"]
 
     for ing in required_ingredients:
+        if stop_test_flag:  # Vérifier à chaque ingrédient
+            return
         x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
         chef_agent.move_to(x1, y1)
         chef_agent.pick_ingredient(ingredients_shapes[ing], ing)
 
+    if stop_test_flag:  # Vérifier avant la préparation
+        return
+        
     chef_agent.move_to(prep_pos[0], prep_pos[1])
 
     for ing in required_ingredients:
-        if ing in methods:
+        if ing in methods and not stop_test_flag:
             for action in methods[ing]:
                 chef_agent.perform_method(ing, action)
 
+    if stop_test_flag:  # Vérifier avant de servir
+        return
+        
     chef_agent.move_to(counter_pos[0], counter_pos[1])
     chef_agent.serve(counter_shape)
 
+def reset_plats_prepared():
+    global recipes_count
+    recipes_count = 0
+    score_label.config(text=f"Recettes servies : {recipes_count}")
 
 # ------------------ GUI TKINTER ------------------
 root = tk.Tk()
@@ -421,8 +452,6 @@ main_frame.pack(fill="both", expand=True)
 
 main_canvas = tk.Canvas(main_frame)
 main_canvas.pack(side="left", fill="both", expand=True)
-
-
 
 # === PANEL À DROITE POUR LES BOUTONS ===
 buttons_frame = tk.Frame(main_frame, padx=10, pady=10, bg="lightgrey")
@@ -449,9 +478,6 @@ entry.pack(pady=5, fill="x")
 # Optionnel : sélectionne le 1er plat par défaut
 entry.set(dish_names[0])
 
-
-
-
 timer_label = tk.Label(content_frame, text="⏱ Temps restant : 60s", font=("Arial", 14, "bold"), fg="red")
 timer_label.pack(pady=5)
 
@@ -463,9 +489,6 @@ output.pack(pady=10)
 
 canvas = tk.Canvas(content_frame, width=850, height=400, bg="lightblue")
 canvas.pack(pady=10)
-
-
-
 
 # Charger les images
 chef1_img = tk.PhotoImage(file="chef1.png")
@@ -510,13 +533,6 @@ canvas.create_text((prep_x1 + prep_x2)//2, prep_y1 - 10, text="Plan de travail",
 counter_x1, counter_y1, counter_x2, counter_y2 = 750, 50, 800, 150
 counter = canvas.create_rectangle(counter_x1, counter_y1, counter_x2, counter_y2, fill="white")
 canvas.create_text((counter_x1 + counter_x2)//2, counter_y1 - 10, text="Comptoir", font=("Arial", 12))
-
-
-def reset_plats_prepared():
-    global recipes_count
-    recipes_count = 0
-    score_label.config(text=f"Recettes servies : {recipes_count}")
-
 
 # Buttons
 tk.Button(
@@ -578,6 +594,5 @@ tk.Button(
         start_test_coop_30s()
     )
 ).pack(pady=5)
-
 
 root.mainloop()
