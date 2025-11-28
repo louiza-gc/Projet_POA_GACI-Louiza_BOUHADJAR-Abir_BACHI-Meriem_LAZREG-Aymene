@@ -16,7 +16,31 @@ test_mode = False
 test_timer_running = False
 test_start_time = 0
 test_count = 0
-stop_test_flag = False  # Nouveau flag pour arrêter les tests
+stop_test_flag = False
+
+# Variables pour la coopération
+coop_total_steps = 0
+coop_completed_steps = 0
+coop_lock = threading.Lock()
+all_ingredients_picked = False
+coop_served = False
+
+# ------------------ Fonctions pour la coopération ------------------
+def compute_total_steps(recipe):
+    """Calcule le nombre total d'étapes pour une recette"""
+    total = 0
+    for ingredient in recipe["ingredients"]:
+        if ingredient in recipe["methods"]:
+            total += len(recipe["methods"][ingredient])
+    return total
+
+def reset_coop_variables():
+    """Réinitialise les variables de coopération"""
+    global coop_total_steps, coop_completed_steps, all_ingredients_picked, coop_served
+    coop_total_steps = 0
+    coop_completed_steps = 0
+    all_ingredients_picked = False
+    coop_served = False
 
 # ------------------ Fenêtre commande servie ------------------
 def show_order_served():
@@ -131,9 +155,9 @@ class ChefAgent:
         if not test_mode:
             show_order_served()
 
-    # ---------------- COOPÉRATION PARALLÈLE ------------------
+    # ---------------- COOPÉRATION PARALLÈLE AMÉLIORÉE ------------------
     def cooperate(self, other_agent, dish_order, ingredients_shapes, prep_pos, counter_pos, counter_shape):
-        global start_time, timer_running
+        global start_time, timer_running, all_ingredients_picked, coop_served
 
         self.output.delete("1.0", tk.END)
 
@@ -142,40 +166,121 @@ class ChefAgent:
             return
 
         reset_ingredients_colors()
+        reset_coop_variables()
         start_timer()
 
         recipe = recipes[dish_order]
         required_ingredients = recipe["ingredients"]
         methods = recipe["methods"]
 
+        # Calculer le total d'étapes
+        coop_total_steps = compute_total_steps(recipe)
+        self.output.insert(tk.END, f"🧑‍🍳 Mode COOP - Total des étapes : {coop_total_steps}\n")
+        self.output.yview_moveto(1)
+
+        # Répartir les ingrédients entre les chefs
+        chef1_ingredients = [ing for i, ing in enumerate(required_ingredients) if i % 2 == 0]
+        chef2_ingredients = [ing for i, ing in enumerate(required_ingredients) if i % 2 == 1]
+
+        self.output.insert(tk.END, f"👨‍🍳 Chef 1 s'occupe de : {', '.join(chef1_ingredients)}\n")
+        self.output.insert(tk.END, f"👩‍🍳 Chef 2 s'occupe de : {', '.join(chef2_ingredients)}\n")
+        self.output.yview_moveto(1)
+
+        # Compteur pour suivre les ingrédients ramassés
+        picked_ingredients = set()
+        pick_lock = threading.Lock()
+
+        def ingredient_picked(ing_name):
+            with pick_lock:
+                picked_ingredients.add(ing_name)
+                if len(picked_ingredients) == len(required_ingredients):
+                    global all_ingredients_picked
+                    all_ingredients_picked = True
+                    self.output.insert(tk.END, "✅ Tous les ingrédients sont ramassés ! Début de la préparation...\n")
+                    self.output.yview_moveto(1)
+
+        def increment_step():
+            global coop_completed_steps
+            with coop_lock:
+                coop_completed_steps += 1
+                self.output.insert(tk.END, f"📊 Progression : {coop_completed_steps}/{coop_total_steps} étapes\n")
+                self.output.yview_moveto(1)
+                return coop_completed_steps
+
+        def check_and_serve():
+            global coop_served
+            if stop_test_flag or coop_served:
+                return False
+                
+            with coop_lock:
+                if coop_completed_steps >= coop_total_steps and not coop_served:
+                    coop_served = True
+                    return True
+            return False
+
         # ---------------- THREAD CHEF 1 ------------------
         def chef1_task():
-            for i, ing in enumerate(required_ingredients):
-                if i % 2 == 0 and not stop_test_flag:
-                    x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
-                    self.move_to(x1, y1)
-                    self.pick_ingredient(ingredients_shapes[ing], ing)
+            # Chef 1 prend SES ingrédients (pairs seulement)
+            for ing in chef1_ingredients:
+                if stop_test_flag:
+                    return
+                x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
+                self.move_to(x1, y1)
+                self.pick_ingredient(ingredients_shapes[ing], ing)
+                ingredient_picked(ing)
 
+            # Attendre que tous les ingrédients soient ramassés
+            while not all_ingredients_picked and not stop_test_flag:
+                time.sleep(0.1)
+
+            # Préparer SES ingrédients seulement
             if not stop_test_flag:
                 self.move_to(prep_pos[0], prep_pos[1])
-                for ing in required_ingredients:
+                for ing in chef1_ingredients:
                     if ing in methods and not stop_test_flag:
                         for action in methods[ing]:
                             self.perform_method(ing, action)
+                            increment_step()
+
+            # Vérifier si on peut servir
+            if check_and_serve():
+                self.move_to(counter_pos[0], counter_pos[1])
+                self.serve(counter_shape)
+            else:
+                # Retour à la position initiale
+                self.move_to(20, 350)
 
         # ---------------- THREAD CHEF 2 ------------------
         def chef2_task():
-            for i, ing in enumerate(required_ingredients):
-                if i % 2 == 1 and not stop_test_flag:
-                    x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
-                    other_agent.move_to(x1, y1)
-                    other_agent.pick_ingredient(ingredients_shapes[ing], ing)
+            # Chef 2 prend SES ingrédients (impairs seulement)
+            for ing in chef2_ingredients:
+                if stop_test_flag:
+                    return
+                x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
+                other_agent.move_to(x1, y1)
+                other_agent.pick_ingredient(ingredients_shapes[ing], ing)
+                ingredient_picked(ing)
 
+            # Attendre que tous les ingrédients soient ramassés
+            while not all_ingredients_picked and not stop_test_flag:
+                time.sleep(0.1)
+
+            # Préparer SES ingrédients seulement
             if not stop_test_flag:
                 other_agent.move_to(prep_pos[0] + 50, prep_pos[1])
-                time.sleep(1)
+                for ing in chef2_ingredients:
+                    if ing in methods and not stop_test_flag:
+                        for action in methods[ing]:
+                            other_agent.perform_method(ing, action)
+                            increment_step()
+
+            # Vérifier si on peut servir
+            if check_and_serve():
                 other_agent.move_to(counter_pos[0], counter_pos[1])
                 other_agent.serve(counter_shape)
+            else:
+                # Retour à la position initiale
+                other_agent.move_to(100, 350)
 
         # ---------------- LANCEMENT PARALLÈLE ------------------
         t1 = threading.Thread(target=chef1_task)
@@ -183,6 +288,17 @@ class ChefAgent:
 
         t1.start()
         t2.start()
+
+        # Attendre la fin des deux threads
+        def wait_for_completion():
+            t1.join()
+            t2.join()
+            # Réinitialiser après completion
+            reset_chefs_position()
+            
+        completion_thread = threading.Thread(target=wait_for_completion)
+        completion_thread.daemon = True
+        completion_thread.start()
 
 # ------------------ Timer ------------------
 def start_timer():
@@ -317,6 +433,9 @@ def start_test_coop_30s():
         completed = 0
 
         while time.time() < end_time and not stop_test_flag:
+            # Réinitialiser les variables pour chaque plat
+            reset_coop_variables()
+            
             order = generate_random_order()
             recipe = recipes.get(order)
             if not recipe:
@@ -324,41 +443,120 @@ def start_test_coop_30s():
 
             required_ingredients = recipe["ingredients"]
             methods = recipe["methods"]
+            
+            # Calculer le total d'étapes
+            coop_total_steps = compute_total_steps(recipe)
+
+            # Répartir les ingrédients entre les chefs
+            chef1_ingredients = [ing for i, ing in enumerate(required_ingredients) if i % 2 == 0]
+            chef2_ingredients = [ing for i, ing in enumerate(required_ingredients) if i % 2 == 1]
 
             def ui_update(o=order):
                 entry.delete(0, tk.END)
                 entry.insert(0, o)
-                output.insert(tk.END, f"\nTest : recette {o.upper()} (coop)\n")
+                output.insert(tk.END, f"\nTest : recette {o.upper()} (coop) - {coop_total_steps} étapes\n")
+                output.insert(tk.END, f"👨‍🍳 Chef 1 s'occupe de : {', '.join(chef1_ingredients)}\n")
+                output.insert(tk.END, f"👩‍🍳 Chef 2 s'occupe de : {', '.join(chef2_ingredients)}\n")
                 output.yview_moveto(1)
             root.after(0, ui_update)
 
+            # Variables locales pour ce plat
+            plat_all_ingredients_picked = False
+            plat_coop_completed_steps = 0
+            plat_coop_served = False
+            plat_picked_ingredients = set()
+            plat_lock = threading.Lock()
+
+            def plat_ingredient_picked(ing_name):
+                nonlocal plat_all_ingredients_picked
+                with plat_lock:
+                    plat_picked_ingredients.add(ing_name)
+                    if len(plat_picked_ingredients) == len(required_ingredients):
+                        plat_all_ingredients_picked = True
+                        output.insert(tk.END, "✅ Tous les ingrédients sont ramassés ! Début de la préparation...\n")
+                        output.yview_moveto(1)
+
+            def plat_increment_step():
+                nonlocal plat_coop_completed_steps
+                with plat_lock:
+                    plat_coop_completed_steps += 1
+                    output.insert(tk.END, f"📊 Progression : {plat_coop_completed_steps}/{coop_total_steps} étapes\n")
+                    output.yview_moveto(1)
+                    return plat_coop_completed_steps
+
+            def plat_check_and_serve():
+                nonlocal plat_coop_served
+                if stop_test_flag or plat_coop_served:
+                    return False
+                    
+                with plat_lock:
+                    if plat_coop_completed_steps >= coop_total_steps and not plat_coop_served:
+                        plat_coop_served = True
+                        return True
+                return False
+
             # --- définir les tâches des deux chefs ---
             def chef1_task():
-                for i, ing in enumerate(required_ingredients):
-                    if i % 2 == 0 and not stop_test_flag:
-                        x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
-                        chef1.move_to(x1, y1)
-                        chef1.pick_ingredient(ingredients_shapes[ing], ing)
+                # Chef 1 prend SES ingrédients (pairs seulement)
+                for ing in chef1_ingredients:
+                    if stop_test_flag:
+                        return
+                    x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
+                    chef1.move_to(x1, y1)
+                    chef1.pick_ingredient(ingredients_shapes[ing], ing)
+                    plat_ingredient_picked(ing)
 
+                # Attendre que tous les ingrédients soient ramassés
+                while not plat_all_ingredients_picked and not stop_test_flag:
+                    time.sleep(0.1)
+
+                # Préparer SES ingrédients seulement
                 if not stop_test_flag:
                     chef1.move_to(prep_x1, prep_y1)
-                    for ing in required_ingredients:
+                    for ing in chef1_ingredients:
                         if ing in methods and not stop_test_flag:
                             for action in methods[ing]:
                                 chef1.perform_method(ing, action)
+                                plat_increment_step()
+
+                # Vérifier si on peut servir
+                if plat_check_and_serve():
+                    chef1.move_to(counter_x1, counter_y1)
+                    chef1.serve(counter)
+                else:
+                    # Retour à la position initiale
+                    chef1.move_to(20, 350)
 
             def chef2_task():
-                for i, ing in enumerate(required_ingredients):
-                    if i % 2 == 1 and not stop_test_flag:
-                        x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
-                        chef2.move_to(x1, y1)
-                        chef2.pick_ingredient(ingredients_shapes[ing], ing)
+                # Chef 2 prend SES ingrédients (impairs seulement)
+                for ing in chef2_ingredients:
+                    if stop_test_flag:
+                        return
+                    x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
+                    chef2.move_to(x1, y1)
+                    chef2.pick_ingredient(ingredients_shapes[ing], ing)
+                    plat_ingredient_picked(ing)
 
+                # Attendre que tous les ingrédients soient ramassés
+                while not plat_all_ingredients_picked and not stop_test_flag:
+                    time.sleep(0.1)
+
+                # Préparer SES ingrédients seulement
                 if not stop_test_flag:
                     chef2.move_to(prep_x1 + 50, prep_y1)
-                    time.sleep(1)
+                    for ing in chef2_ingredients:
+                        if ing in methods and not stop_test_flag:
+                            for action in methods[ing]:
+                                chef2.perform_method(ing, action)
+                                plat_increment_step()
+
+                # Vérifier si on peut servir
+                if plat_check_and_serve():
                     chef2.move_to(counter_x1, counter_y1)
                     chef2.serve(counter)
+                else:
+                    # Retour à la position initiale
+                    chef2.move_to(100, 350)
 
             # lancer les deux threads pour la coopération
             t1 = threading.Thread(target=chef1_task)
@@ -370,10 +568,13 @@ def start_test_coop_30s():
             t1.join()
             t2.join()
 
-            if not stop_test_flag:
+            if not stop_test_flag and plat_coop_served:
                 completed += 1
 
-            time.sleep(0.02)
+            # Réinitialiser les couleurs et positions pour le prochain plat
+            reset_ingredients_colors()
+            reset_chefs_position()
+            time.sleep(0.1)
 
         # Fin du test
         def finish_ui():
