@@ -58,19 +58,3 @@ Chaque chef est un agent autonome avec :
 - Boutons : *Préparer le plat (Chef 1)*, *Nouvelle commande aléatoire*, *Préparer ensemble*, *Test 30s (Solo)*, *Test 30s (Coop)*.
 
 ---
-
-## Installation
-
-Prérequis : **Python 3.12+** (Tkinter est inclus dans la distribution standard de Python sur la plupart des systèmes).
-
-```bash
-# Sous Linux, si Tkinter n'est pas déjà présent :
-sudo apt-get install python3-tk
-```
-
-
-## Exécution
-
-```bash
-python main.py
-```
